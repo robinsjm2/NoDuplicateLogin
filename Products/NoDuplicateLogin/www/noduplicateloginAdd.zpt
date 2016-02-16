@@ -1,0 +1,56 @@
+<h1 tal:replace="structure here/manage_page_header">Header</h1>
+
+<h2 tal:define="form_title string:Add No Duplicate Login Plugin"
+    tal:replace="structure here/manage_form_title">Form Title</h2>
+
+<p class="form-help">
+A plugin that rejects multiple logins with the same user at the same
+time, by forcing a logout of all but one user.
+</p>
+
+<form action="manage_addNoDuplicateLogin" method="post">
+<table cellspacing="0" cellpadding="2" border="0">
+  <tr>
+    <td align="left" valign="top">
+    <div class="form-label">
+    Id
+    </div>
+    </td>
+    <td align="left" valign="top">
+    <input type="text" name="id" size="40" value="no_duplicate_login"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="left" valign="top">
+    <div class="form-optional">
+    Title
+    </div>
+    </td>
+    <td align="left" valign="top">
+    <input type="text" name="title" size="40" value="No Duplicate Login Plugin"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="left" valign="top">
+    <div class="form-optional">
+    Cookie Name (optional, <br />default cookie name is <br />'__noduplicate')
+    </div>
+    </td>
+    <td align="left" valign="top">
+    <input type="text" name="cookie_name" size="40"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="left" valign="top">
+    </td>
+    <td align="left" valign="top">
+    <div class="form-element">
+    <input class="form-element" type="submit" name="submit" 
+     value=" Add " /> 
+    </div>
+    </td>
+  </tr>
+</table>
+</form>
+
+<h1 tal:replace="structure here/manage_page_footer">Footer</h1>
