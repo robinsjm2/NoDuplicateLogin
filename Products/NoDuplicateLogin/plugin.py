@@ -29,7 +29,7 @@
 """NoDuplicateLogin plugin
 """
 
-__author__ = "Daniel Nouri <daniel.nouri@gmail.com>"
+__author__ = "Jonathan Robinson <jrobinson@sanfordguide.com>"
 
 from AccessControl import ClassSecurityInfo, Permissions
 from BTrees.OOBTree import OOBTree
@@ -75,7 +75,7 @@ def manage_addNoDuplicateLogin(dispatcher,
 class NoDuplicateLogin(BasePlugin, Cacheable):
 
     """PAS plugin that rejects multiple logins with the same user at
-    the same time, by forcing a logout of all but one user.
+    the same time, by forcing a logout of all but one user.  If a user has max_seats > 1, then it will reject users after maximum seats are filled.
     """
 
     meta_type = 'No Duplicate Login Plugin'
@@ -88,8 +88,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             'mode': 'w'},
         )
 
-    # UIDs older than three days are deleted from our storage...
-    time_to_delete_cookies = 3
+    # UIDs older than 30 minutes are deleted from our storage...
+    time_to_delete_cookies = 1 / 24 / 2  # since this is expressed in days, we have to divide by 24 hours and then again in half for 30 minutes
 
     # XXX I wish I had a better explanation for this, but disabling this makes
     # both the ZMI (basic auth) work and the NoDuplicateLogin work.
