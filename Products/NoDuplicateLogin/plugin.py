@@ -48,7 +48,6 @@ from plone.keyring.interfaces import IKeyManager
 from urllib import quote, unquote
 from utils import uuid
 from zope.component import queryUtility
-from zope.component.hooks import getSite
 
 manage_addNoDuplicateLoginForm = PageTemplateFile(
     'www/noduplicateloginAdd',
@@ -89,8 +88,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             'mode': 'w'},
         )
     
-    portal = getSite()
-    mtool = portal.portal_membership
+    # mtool = portal_membership
 
     # UIDs older than 30 minutes are deleted from our storage...
     time_to_delete_cookies = 1 / 24 / 2  # since this is expressed in days, we have to divide by 24 hours and then again in half for 30 minutes
@@ -229,7 +227,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 self.mapping2[cookie_val] = {userid: login, startTime: now, expireTime: now + self.time_to_delete_cookies}
                 self.setCookie(cookie_val)
     
-            return None  # Note that we never return anything useful
+        return None  # Note that we never return anything useful
 
     security.declarePrivate('resetCredentials')
 
