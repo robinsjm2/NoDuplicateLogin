@@ -93,7 +93,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         )
 
     # UIDs older than 30 minutes are deleted from our storage...
-    time_to_delete_cookies = 1 / 24 / 2  # since this is expressed in days, we have to divide by 24 hours and then again in half for 30 minutes
+    time_to_delete_cookies = 3000
+    #time_to_delete_cookies = 1 / 24 / 2  # since this is expressed in days, we have to divide by 24 hours and then again in half for 30 minutes
 
     # XXX I wish I had a better explanation for this, but disabling this makes
     # both the ZMI (basic auth) work and the NoDuplicateLogin work.
@@ -245,6 +246,46 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 self.mapping1[login]['tokens'].append( cookie_val )
                 self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': now + self.time_to_delete_cookies}
                 self.setCookie(cookie_val)
+        else:
+            # Max seats is not 1. Treat this as a floating licenses scenario.
+            # Nobody is logged out, but once the max seats threshold is reached,
+            # active tokens must expire before new users may log in.
+            if cookie_val:
+                # A cookie value is there.  If it's the same as the value
+                # in our mapping, it's fine.  Otherwise we'll force a
+                # logout.
+                existing = self.mapping1.get(login, None)
+                
+                if self.DEBUG:
+                    if existing:
+                        print "authenticateCredentials():: cookie_val is " + cookie_val + ", and active tokens are: " + ', '.join( existing['tokens'] )
+                
+                try:
+                    # if the cookie is in the active tokens for the given login
+                    if existing and cookie_val in existing['tokens']:
+                        tokenInfo = self.mapping2.get( cookie_val, None )
+                        now = DateTime()
+                        extendedExpireTime = now + self.time_to_delete_cookies
+                        
+                        # if the token in the cookie has not expired on the server-side, then extend its expireTime
+                        if tokenInfo and 'expireTime' in tokenInfo and tokenInfo['expireTime'] > now:
+                            self.mapping2[cookie_val]['expireTime'] = extendedExpireTime
+                        else:
+                            # since the cookie expired, set the startTime to now and the expireTime based on that
+                            self.mapping2[cookie_val] = { 'userid': login, 'startTime': now, 'expireTime': extendedExpireTime }
+                        
+                    else:
+                        # the token stored in the cookie is not in the list of tokens on the server-side. let's re-issue a token.
+                        self.issueToken(login, max_seats, request, response)
+                except:
+                    traceback.print_exc()
+    
+            else:
+                if self.DEBUG:
+                    print "authenticateCredentials:: Try to issue a token because there is no cookie value."
+                    
+                # When no cookie is present, attempt to issue a token and use the cookie to store it
+                self.issueToken(login, max_seats, request, response)
     
         return None  # Note that we never return anything useful
 
@@ -260,7 +301,6 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         if cookie_val:
             loginandinfo = self.mapping2.get(cookie_val, None)
             if loginandinfo:
-                print "The tuple contains: %s" % (loginandinfo,)
                 login = loginandinfo['userid']
                 del self.mapping2[cookie_val]
                 existing = self.mapping1.get(login, None)
@@ -319,7 +359,74 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             
         if self.DEBUG:
             print "setCookie():: " + str(value)
+    
+    security.declarePrivate('clearStaleTokens')
+    def clearStaleTokens(self, login):
+        
+        if self.DEBUG:
+            print "clearStaleTokens:: " + login
 
+        existing = self.mapping1.get(login, None)
+        
+        if existing and 'tokens' in existing:
+            # for each token, remove if stale
+            for token in existing['tokens']:
+                tokenInfo = self.mapping2.get( token, None )
+                
+                now = DateTime()
+                # if the expireTime for the token has passed, then expire the token
+                if tokenInfo and 'expireTime' in tokenInfo and tokenInfo['expireTime'] < now:
+                    if self.DEBUG:
+                        print "clearStaleTokens:: Remove token (%s) because expireTime(%s). startTime(%s)" % (token, tokenInfo['expireTime'], tokenInfo['startTime'] )
+                    # remove from the active tokens for the given login
+                    self.mapping1[login]['tokens'].remove(token)
+                    del self.mapping2[token]
+
+    security.declarePrivate('issueToken')
+    def issueToken(self, login, max_seats, request, response):
+        # When no cookie is present, we generate one, store it and
+        # set it in the response:
+        cookie_val = uuid()
+        iTokens = 0 # assume no tokens are active until proven otherwise
+        existing = self.mapping1.get(login)
+        if existing and 'tokens' in existing:
+            iTokens = len( existing['tokens'] )
+        else:
+            self.mapping1[login] = { 'tokens':[] } # initialize tokens array for this login
+        
+        if self.DEBUG:
+            print "issueToken:: login = %s, active = %i, max = %i" % (login, iTokens, max_seats)
+
+        if iTokens < max_seats:
+            now = DateTime()
+            self.mapping1[login]['tokens'].append( cookie_val )
+            self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': now + self.time_to_delete_cookies}
+            self.setCookie(cookie_val)
+            
+            if self.DEBUG:
+                print "issueToken:: after issue token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
+            
+            # if this is the last token to issue,
+            # then go ahead and clear stale tokens for this login
+            if iTokens + 1 == max_seats:
+                self.clearStaleTokens(login)
+        else:
+            # if the token is not able to be issued because of max_seats filled,
+            # then clear stale tokens, and show the message
+            self.clearStaleTokens(login)
+
+            # Logout the
+            # user by calling resetCredentials.  Note that this
+            # will eventually call our own resetCredentials which
+            # will cleanup our own cookie.
+            try:
+                self.resetAllCredentials(request, response)
+                self._getPAS().plone_utils.addPortalMessage(_(
+                    u"The maximum number of simultaneous logins for this user has been exceeded.  You have been \
+                    logged out."), "error")
+            except:
+                traceback.print_exc()
+        
     security.declareProtected(Permissions.manage_users, 'cleanUp')
 
     def cleanUp(self):
@@ -335,6 +442,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 # if this is not a dictionary, then it is a stale entry (could be tuple from old scheme)
                 if not isinstance( obj, dict ):
                     del mapping[key]
+                    count += 1
                 elif 'expireTime' in obj and obj['expireTime'] < now:
                     del mapping[key]
                     
