@@ -36,6 +36,7 @@ from BTrees.OOBTree import OOBTree
 from DateTime import DateTime
 from Globals import InitializeClass
 from OFS.Cache import Cacheable
+from Products.CMFCore.utils import getToolByName
 from Products.CMFPlone import PloneMessageFactory as _
 from Products.PageTemplates.PageTemplateFile import PageTemplateFile
 from Products.PluggableAuthService.plugins.BasePlugin import BasePlugin
@@ -48,6 +49,7 @@ from plone.keyring.interfaces import IKeyManager
 from urllib import quote, unquote
 from utils import uuid
 from zope.component import queryUtility
+import traceback
 
 manage_addNoDuplicateLoginForm = PageTemplateFile(
     'www/noduplicateloginAdd',
@@ -80,15 +82,15 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
     meta_type = 'No Duplicate Login Plugin'
     cookie_name = '__noduplicate'
+    DEBUG = True
     security = ClassSecurityInfo()
+    login_member_data_mapping = None
 
     _properties = (
         {'id': 'title', 'label': 'Title', 'type': 'string', 'mode': 'w'},
         {'id': 'cookie_name', 'label': 'Cookie Name', 'type': 'string',
             'mode': 'w'},
         )
-    
-    # mtool = portal_membership
 
     # UIDs older than 30 minutes are deleted from our storage...
     time_to_delete_cookies = 1 / 24 / 2  # since this is expressed in days, we have to divide by 24 hours and then again in half for 30 minutes
@@ -176,36 +178,53 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         # initialize max_seats at 1
         max_seats = 1
 
+        if self.login_member_data_mapping is None:
+            self.login_member_data_mapping = OOBTree() # if this has not been initialized then do it now
+            if self.DEBUG:
+                print "Initialized the Login Member Data Mapping"
+  
         # if the max_seats has a valid cached value, then use it
-        cached_member_data = self.login_member_data_mapping.get(login)
+        cached_member_data = self.login_member_data_mapping.get(login, None)
         
         now = DateTime()
-        if cached_member_data and now < cached_member_data.expireTime:
-            max_seats = cached_member_data.maxSeats
+        if cached_member_data and 'expireTime' in cached_member_data and 'maxSeats' in cached_member_data and now < cached_member_data['expireTime']:
+            max_seats = cached_member_data['maxSeats']
         else:
+            mtool = getToolByName(self, 'portal_membership')
             member = mtool.getMemberById(login)
             # get the max_seats property from the member data tool
             if member is not None:
                 max_seats = member.getProperty("max_seats")
                 # cache the max_seats for login
-                self.login_member_data_mapping[login] = { max_seats: int( max_seats ), expireTime: now + self.time_to_delete_cookies }
+                self.login_member_data_mapping[login] = { 'maxSeats': int( max_seats ), 'expireTime': now + self.time_to_delete_cookies }
+                
+        # When debugging, print the maxSeats value that was resolved
+        if self.DEBUG:
+            print "authenticateCredentials():: Max Seats is " + str( max_seats )
 
         if max_seats == 1:
             if cookie_val:
                 # A cookie value is there.  If it's the same as the value
                 # in our mapping, it's fine.  Otherwise we'll force a
                 # logout.
-                existing = self.mapping1.get(login)
+                existing = self.mapping1.get(login, None)
                 
-                if existing and cookie_val not in existing.tokens:
+                if self.DEBUG:
+                    if existing:
+                        print "authenticateCredentials():: cookie_val is " + cookie_val + ", and active tokens are: " + ', '.join( existing['tokens'] )
+                
+                if existing and cookie_val not in existing['tokens']:
                     # The cookies values differ, we want to logout the
                     # user by calling resetCredentials.  Note that this
                     # will eventually call our own resetCredentials which
                     # will cleanup our own cookie.
-                    self.resetAllCredentials(request, response)
-                    pas_instance.plone_utils.addPortalMessage(_(
-                        u"Someone else logged in under your name.  You have been \
-                        logged out"), "error")
+                    try:
+                        self.resetAllCredentials(request, response)
+                        pas_instance.plone_utils.addPortalMessage(_(
+                            u"Someone else logged in under your name.  You have been \
+                            logged out"), "error")
+                    except:
+                        traceback.print_exc()
                 elif existing is None:
                     # The browser has the cookie but we don't know about
                     # it.  Let's reset our own cookie:
@@ -217,14 +236,14 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 cookie_val = uuid()
                 # do some cleanup in our mappings
                 existing = self.mapping1.get(login)
-                if existing:
-                    if existing.tokens[0] in self.mapping2:
-                        del self.mapping2[existing.tokens[0]]
+                if existing and 'tokens' in existing:
+                    if existing['tokens'][0] in self.mapping2:
+                        del self.mapping2[existing['tokens'][0]]
     
                 now = DateTime()
-                self.mapping1[login] = [];
-                self.mapping1[login].append( cookie_val )
-                self.mapping2[cookie_val] = {userid: login, startTime: now, expireTime: now + self.time_to_delete_cookies}
+                self.mapping1[login] = { 'tokens':[] };
+                self.mapping1[login]['tokens'].append( cookie_val )
+                self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': now + self.time_to_delete_cookies}
                 self.setCookie(cookie_val)
     
         return None  # Note that we never return anything useful
@@ -234,15 +253,19 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
     def resetCredentials(self, request, response):
         """See ICredentialsResetPlugin.
         """
+        if self.DEBUG:
+            print "resetCredentials()::"
+
         cookie_val = self.getCookie()
         if cookie_val:
-            loginandinfo = self.mapping2.get(cookie_val)
+            loginandinfo = self.mapping2.get(cookie_val, None)
             if loginandinfo:
-                login = loginandinfo.userid
+                print "The tuple contains: %s" % (loginandinfo,)
+                login = loginandinfo['userid']
                 del self.mapping2[cookie_val]
-                existing = self.mapping1.get(login)
+                existing = self.mapping1.get(login, None)
                 if existing:
-                    assert cookie_val not in existing.tokens
+                    assert cookie_val not in existing['tokens']
 
         self.setCookie('')
 
@@ -271,6 +294,10 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         """
         request = self.REQUEST
         cookie = request.get(self.cookie_name, '')
+        
+        if self.DEBUG:
+            print "getCookie():: " + str(unquote(cookie))
+        
         return unquote(cookie)
 
     security.declarePrivate('setCookie')
@@ -289,6 +316,9 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             response.setCookie(self.cookie_name, value, path='/')
         else:
             response.expireCookie(self.cookie_name, path='/')
+            
+        if self.DEBUG:
+            print "setCookie():: " + str(value)
 
     security.declareProtected(Permissions.manage_users, 'cleanUp')
 
@@ -302,13 +332,16 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         def cleanStorage(mapping):
             count = 0
             for key, obj in mapping.items():
-                if obj.expireTime < now:
+                # if this is not a dictionary, then it is a stale entry (could be tuple from old scheme)
+                if not isinstance( obj, dict ):
+                    del mapping[key]
+                elif 'expireTime' in obj and obj['expireTime'] < now:
                     del mapping[key]
                     
                     # if the mapping2 deletes its token by UID, make sure that the mapping1 removes that token as well
-                    for userid, info in mapping1.items():
+                    for userid, info in self.mapping1.items():
                         try:
-                            info.tokens.remove(key) # remove the UID from the tokens for that login
+                            info['tokens'].remove(key) # remove the UID from the tokens for that login
                         except:
                             pass
                     count += 1
