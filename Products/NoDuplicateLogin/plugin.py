@@ -243,7 +243,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                         del self.mapping2[existing['tokens'][0]]
     
                 now = DateTime()
-                self.mapping1[login] = { 'tokens':[] };
+                self.mapping1[login] = { 'tokens':[] }
                 self.mapping1[login]['tokens'].append( cookie_val )
                 self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
                 self.setCookie(cookie_val)
@@ -252,35 +252,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             # Nobody is logged out, but once the max seats threshold is reached,
             # active tokens must expire before new users may log in.
             if cookie_val:
-                # A cookie value is there.  If it's the same as the value
-                # in our mapping, it's fine.  Otherwise we'll force a
-                # logout.
-                existing = self.mapping1.get(login, None)
-                
-                if self.DEBUG:
-                    if existing:
-                        print "authenticateCredentials():: cookie_val is " + cookie_val + ", and active tokens are: " + ', '.join( existing['tokens'] )
-                
-                try:
-                    # if the cookie is in the active tokens for the given login
-                    if existing and cookie_val in existing['tokens']:
-                        tokenInfo = self.mapping2.get( cookie_val, None )
-                        now = DateTime()
-                        extendedExpireTime = DateTime( now.asdatetime() + self.time_to_persist_cookies )
-                        
-                        # if the token in the cookie has not expired on the server-side, then extend its expireTime
-                        if tokenInfo and 'expireTime' in tokenInfo and tokenInfo['expireTime'] > now:
-                            self.mapping2[cookie_val]['expireTime'] = extendedExpireTime
-                        else:
-                            # since the cookie expired, set the startTime to now and the expireTime based on that
-                            self.mapping2[cookie_val] = { 'userid': login, 'startTime': now, 'expireTime': extendedExpireTime }
-                        
-                    else:
-                        # the token stored in the cookie is not in the list of tokens on the server-side. let's re-issue a token.
-                        self.issueToken(login, max_seats, request, response)
-                except:
-                    traceback.print_exc()
-    
+                # When the cookie value is there, try to verify it or activate it if is it not added yet
+                self.verifyToken( cookie_val, login, max_seats, request, response )
             else:
                 if self.DEBUG:
                     print "authenticateCredentials:: Try to issue a token because there is no cookie value."
@@ -305,7 +278,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     login = loginandinfo['userid']
                     del self.mapping2[cookie_val]
                     existing = self.mapping1.get(login, None)
-                    if existing:
+                    if existing and 'tokens' in existing:
+                        existing['tokens'].remove(cookie_val)
                         assert cookie_val not in existing['tokens']
     
             self.setCookie('')
@@ -388,28 +362,46 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
     security.declarePrivate('issueToken')
     def issueToken(self, login, max_seats, request, response):
+        """ Creates a uid and stores in a cookie browser-side
+        """
         # When no cookie is present, we generate one, store it and
         # set it in the response:
         cookie_val = uuid()
+        self.setCookie(cookie_val)
+
+    security.declarePrivate('verifyToken')
+    def verifyToken(self, token, login, max_seats, request, response):
+        """ Activates a token by putting it in the tokens[] array of mapping1[login] if it is not already present. """
+
+        isVerified = False # it is verified if it is already in the active tokens list server-side
         iTokens = 0 # assume no tokens are active until proven otherwise
         existing = self.mapping1.get(login)
         if existing and 'tokens' in existing:
             iTokens = len( existing['tokens'] )
-        else:
-            self.mapping1[login] = { 'tokens':[] } # initialize tokens array for this login
-        
-        if self.DEBUG:
-            print "issueToken:: login = %s, active = %i, max = %i" % (login, iTokens, max_seats)
-
-        if iTokens < max_seats:
-            self.setCookie(cookie_val)
             
-            now = DateTime()
-            self.mapping1[login]['tokens'].append( cookie_val )
-            self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
+            isVerified = token in existing['tokens']
             
             if self.DEBUG:
-                print "issueToken:: after issue token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
+                print "authenticateCredentials():: cookie_val is " + token + ", and active tokens are: " + ', '.join( existing['tokens'] )
+        else:
+            self.mapping1[login] = { 'tokens':[] } # initialize tokens array for this login
+
+        if self.DEBUG:
+            print "verifyToken:: login = %s, active = %i, max = %i" % (login, iTokens, max_seats)
+
+        if isVerified:
+            # just extend it
+            now = DateTime()
+            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
+        elif iTokens < max_seats:
+
+            now = DateTime()
+            # if it already exists, delete it
+            self.mapping1[login]['tokens'].append( token )
+            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
+            
+            if self.DEBUG:
+                print "verifyToken:: after activate token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
             
             # if this is the last token to issue,
             # then go ahead and clear stale tokens for this login
@@ -444,6 +436,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         try:
             self.mapping1.clear()
             self.mapping2.clear()
+            self.setCookie('')
         except:
             traceback.print_exc()
 
