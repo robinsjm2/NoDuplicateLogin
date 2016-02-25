@@ -49,6 +49,8 @@ from plone.keyring.interfaces import IKeyManager
 from urllib import quote, unquote
 from utils import uuid
 from zope.component import queryUtility
+import datetime
+import time
 import traceback
 
 manage_addNoDuplicateLoginForm = PageTemplateFile(
@@ -93,8 +95,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         )
 
     # UIDs older than 30 minutes are deleted from our storage...
-    time_to_delete_cookies = 3000
-    #time_to_delete_cookies = 1 / 24 / 2  # since this is expressed in days, we have to divide by 24 hours and then again in half for 30 minutes
+    time_to_persist_cookies = datetime.timedelta(minutes=30)
 
     # XXX I wish I had a better explanation for this, but disabling this makes
     # both the ZMI (basic auth) work and the NoDuplicateLogin work.
@@ -197,7 +198,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             if member is not None:
                 max_seats = member.getProperty("max_seats")
                 # cache the max_seats for login
-                self.login_member_data_mapping[login] = { 'maxSeats': int( max_seats ), 'expireTime': now + self.time_to_delete_cookies }
+                self.login_member_data_mapping[login] = { 'maxSeats': int( max_seats ), 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
                 
         # When debugging, print the maxSeats value that was resolved
         if self.DEBUG:
@@ -244,7 +245,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 now = DateTime()
                 self.mapping1[login] = { 'tokens':[] };
                 self.mapping1[login]['tokens'].append( cookie_val )
-                self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': now + self.time_to_delete_cookies}
+                self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
                 self.setCookie(cookie_val)
         else:
             # Max seats is not 1. Treat this as a floating licenses scenario.
@@ -265,7 +266,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     if existing and cookie_val in existing['tokens']:
                         tokenInfo = self.mapping2.get( cookie_val, None )
                         now = DateTime()
-                        extendedExpireTime = now + self.time_to_delete_cookies
+                        extendedExpireTime = DateTime( now.asdatetime() + self.time_to_persist_cookies )
                         
                         # if the token in the cookie has not expired on the server-side, then extend its expireTime
                         if tokenInfo and 'expireTime' in tokenInfo and tokenInfo['expireTime'] > now:
@@ -296,18 +297,21 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         """
         if self.DEBUG:
             print "resetCredentials()::"
-
-        cookie_val = self.getCookie()
-        if cookie_val:
-            loginandinfo = self.mapping2.get(cookie_val, None)
-            if loginandinfo:
-                login = loginandinfo['userid']
-                del self.mapping2[cookie_val]
-                existing = self.mapping1.get(login, None)
-                if existing:
-                    assert cookie_val not in existing['tokens']
-
-        self.setCookie('')
+        try:
+            cookie_val = self.getCookie()
+            if cookie_val:
+                loginandinfo = self.mapping2.get(cookie_val, None)
+                if loginandinfo:
+                    login = loginandinfo['userid']
+                    del self.mapping2[cookie_val]
+                    existing = self.mapping1.get(login, None)
+                    if existing:
+                        assert cookie_val not in existing['tokens']
+    
+            self.setCookie('')
+        except:
+            if self.DEBUG:
+                traceback.print_exc()
 
     security.declarePrivate('resetAllCredentials')
 
@@ -398,10 +402,11 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             print "issueToken:: login = %s, active = %i, max = %i" % (login, iTokens, max_seats)
 
         if iTokens < max_seats:
+            self.setCookie(cookie_val)
+            
             now = DateTime()
             self.mapping1[login]['tokens'].append( cookie_val )
-            self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': now + self.time_to_delete_cookies}
-            self.setCookie(cookie_val)
+            self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
             
             if self.DEBUG:
                 print "issueToken:: after issue token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
@@ -411,6 +416,9 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             if iTokens + 1 == max_seats:
                 self.clearStaleTokens(login)
         else:
+            # cannot issue cookie, so clear in browser-side
+            self.setCookie('')
+
             # if the token is not able to be issued because of max_seats filled,
             # then clear stale tokens, and show the message
             self.clearStaleTokens(login)
@@ -426,7 +434,19 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     logged out."), "error")
             except:
                 traceback.print_exc()
-        
+    
+    security.declareProtected(Permissions.manage_users, 'clearAllTokens')
+    def clearAllTokens(self):
+        """Clear all server side tokens.  Use only in testing."""
+        if self.DEBUG:
+            print "clearAllTokens():: called"
+
+        try:
+            self.mapping1.clear()
+            self.mapping2.clear()
+        except:
+            traceback.print_exc()
+
     security.declareProtected(Permissions.manage_users, 'cleanUp')
 
     def cleanUp(self):
