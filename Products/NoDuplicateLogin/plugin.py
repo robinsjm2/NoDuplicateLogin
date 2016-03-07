@@ -380,7 +380,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
     
     security.declarePrivate('clearStaleTokens')
     def clearStaleTokens(self, login):
-        
+        """Clear tokens that should be expired or that have no corresponding mapping and thus have been orphaned."""
         if self.DEBUG:
             print "clearStaleTokens:: " + login
 
@@ -392,6 +392,14 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 tokenInfo = self.mapping2.get( token, None )
                 
                 now = DateTime()
+                
+                # if the token info does not exist, then remove it from the active tokens
+                if tokenInfo is None:
+                    if self.DEBUG:
+                        print "clearStaleTokens:: Remove token (%s) because it was orphaned." % (token)
+                    # remove from the active tokens for the given login
+                    self.mapping1[login]['tokens'].remove(token)
+
                 # if the expireTime for the token has passed, then expire the token
                 if tokenInfo and 'expireTime' in tokenInfo and tokenInfo['expireTime'] < now:
                     if self.DEBUG:
@@ -440,6 +448,11 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             td_seat_timeout = datetime.timedelta(minutes=seat_timeout)
         except:
             pass
+        
+        # if this is the last token to issue,
+        # then go ahead and clear stale tokens for this login
+        if not isVerified and iTokens >= max_seats - 1:
+            self.clearStaleTokens(login)
 
         if isVerified:
             # just extend it
@@ -457,18 +470,16 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             
             if self.DEBUG:
                 print "verifyToken:: after activate token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
-            
-            # if this is the last token to issue,
-            # then go ahead and clear stale tokens for this login
-            if iTokens + 1 == max_seats:
-                self.clearStaleTokens(login)
+
+            # since this was activated, just ensure that the cookie in the browser reflects what is server side
+            self.setCookie( token )
         else:
             # cannot issue cookie, so clear in browser-side
             #self.setCookie('')
 
             # if the token is not able to be issued because of max_seats filled,
-            # then clear stale tokens, and show the message
-            self.clearStaleTokens(login)
+            # then force logout, and show the message
+
 
             # Logout the
             # user by calling resetCredentials.  Note that this
