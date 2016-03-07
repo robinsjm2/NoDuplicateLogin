@@ -94,8 +94,11 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             'mode': 'w'},
         )
 
-    # UIDs older than 30 minutes are deleted from our storage...
-    time_to_persist_cookies = datetime.timedelta(minutes=30)
+    # UIDs older than 30 minutes are deleted from our storage; this can also be set per member data property (which default to 5 minutes)...
+    if DEBUG:
+        time_to_persist_cookies = datetime.timedelta(minutes=5)
+    else:
+        time_to_persist_cookies = datetime.timedelta(minutes=30)
 
     # XXX I wish I had a better explanation for this, but disabling this makes
     # both the ZMI (basic auth) work and the NoDuplicateLogin work.
@@ -177,29 +180,12 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
         cookie_val = self.getCookie()
         
-        # initialize max_seats at 1
-        max_seats = 1
+        # get max seats from member data property or cache and default to 1 if not set
+        try:
+            max_seats = self.getMaxSeatsForLogin(login)
+        except:
+            traceback.print_exc()
 
-        if self.login_member_data_mapping is None:
-            self.login_member_data_mapping = OOBTree() # if this has not been initialized then do it now
-            if self.DEBUG:
-                print "Initialized the Login Member Data Mapping"
-  
-        # if the max_seats has a valid cached value, then use it
-        cached_member_data = self.login_member_data_mapping.get(login, None)
-        
-        now = DateTime()
-        if cached_member_data and 'expireTime' in cached_member_data and 'maxSeats' in cached_member_data and now < cached_member_data['expireTime']:
-            max_seats = cached_member_data['maxSeats']
-        else:
-            mtool = getToolByName(self, 'portal_membership')
-            member = mtool.getMemberById(login)
-            # get the max_seats property from the member data tool
-            if member is not None:
-                max_seats = member.getProperty("max_seats")
-                # cache the max_seats for login
-                self.login_member_data_mapping[login] = { 'maxSeats': int( max_seats ), 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
-                
         # When debugging, print the maxSeats value that was resolved
         if self.DEBUG:
             print "authenticateCredentials():: Max Seats is " + str( max_seats )
@@ -262,6 +248,59 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 self.issueToken(login, max_seats, request, response)
     
         return None  # Note that we never return anything useful
+    
+    security.declarePrivate('getSeatsPropertiesForLogin')
+    def getSeatsPropertiesForLogin(self, login):
+        # initialize max_seats at 1
+        max_seats = 1
+        seat_timeout = 5 # initialize to 5 minutes
+
+        if self.login_member_data_mapping is None:
+            self.login_member_data_mapping = OOBTree() # if this has not been initialized then do it now
+            if self.DEBUG:
+                print "Initialized the Login Member Data Mapping"
+  
+        # if the max_seats has a valid cached value, then use it
+        cached_member_data = self.login_member_data_mapping.get(login, None)
+        
+        now = DateTime()
+        if cached_member_data and 'expireTime' in cached_member_data and 'maxSeats' in cached_member_data and 'seatTimeoutInMinutes' in cached_member_data and now < cached_member_data['expireTime']:
+            max_seats = cached_member_data['maxSeats']
+            seat_timeout = cached_member_data['seatTimeoutInMinutes']
+        else:
+            mtool = getToolByName(self, 'portal_membership')
+            member = mtool.getMemberById(login)
+            # get the max_seats property from the member data tool
+            if member is not None:
+                max_seats = member.getProperty("max_seats")
+                seat_timeout = member.getProperty("seat_timeout_in_minutes")
+                # cache the max_seats for login
+                td_seat_timeout = datetime.timedelta(minutes=seat_timeout)
+                self.login_member_data_mapping[login] = { 'maxSeats': int( max_seats ), 'seatTimeoutInMinutes': float( seat_timeout ), 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
+
+        return { 'maxSeats': int( max_seats ), 'seatTimeoutInMinutes': float( seat_timeout ) }
+
+    security.declarePrivate('getMaxSeatsForLogin')
+    def getMaxSeatsForLogin(self, login):
+        """Returns the max_seats property for a given login
+        """
+        seats_properties = self.getSeatsPropertiesForLogin(login)
+        max_seats = 1 # default to 1 seat
+        
+        if seats_properties and 'maxSeats' in seats_properties:
+            max_seats = seats_properties['maxSeats']
+        return max_seats
+    
+    security.declarePrivate('getSeatTimeoutInMinutesForLogin')
+    def getSeatTimeoutInMinutesForLogin(self, login):
+        """Returns the seat_timeout_in_minutes property for a given login
+        """
+        seats_properties = self.getSeatsPropertiesForLogin(login)
+        seat_timeout_in_minutes = 5 # default to 5 minutes
+        
+        if seats_properties and 'seatTimeoutInMinutes' in seats_properties:
+            seat_timeout_in_minutes = seats_properties['seatTimeoutInMinutes']
+        return seat_timeout_in_minutes
 
     security.declarePrivate('resetCredentials')
 
@@ -270,6 +309,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         """
         if self.DEBUG:
             print "resetCredentials()::"
+
         try:
             cookie_val = self.getCookie()
             if cookie_val:
@@ -278,10 +318,10 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     login = loginandinfo['userid']
                     del self.mapping2[cookie_val]
                     existing = self.mapping1.get(login, None)
-                    if existing and 'tokens' in existing:
+                    if existing and 'tokens' in existing and cookie_val in existing['tokens']:
                         existing['tokens'].remove(cookie_val)
                         assert cookie_val not in existing['tokens']
-    
+
             self.setCookie('')
         except:
             if self.DEBUG:
@@ -367,6 +407,10 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         # When no cookie is present, we generate one, store it and
         # set it in the response:
         cookie_val = uuid()
+
+        if self.DEBUG:
+            print "issueToken::" + cookie_val
+
         self.setCookie(cookie_val)
 
     security.declarePrivate('verifyToken')
@@ -374,6 +418,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         """ Activates a token by putting it in the tokens[] array of mapping1[login] if it is not already present. """
 
         isVerified = False # it is verified if it is already in the active tokens list server-side
+        seat_timeout = 5 # default if there is a problem with the member property
         iTokens = 0 # assume no tokens are active until proven otherwise
         existing = self.mapping1.get(login)
         if existing and 'tokens' in existing:
@@ -388,17 +433,27 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
         if self.DEBUG:
             print "verifyToken:: login = %s, active = %i, max = %i" % (login, iTokens, max_seats)
+            
+        try:
+            # for seats > 1, use member property for cookie timeout value
+            seat_timeout = self.getSeatTimeoutInMinutesForLogin(login)
+            td_seat_timeout = datetime.timedelta(minutes=seat_timeout)
+        except:
+            pass
 
         if isVerified:
             # just extend it
             now = DateTime()
-            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
+            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
+            
+            if self.DEBUG:
+                print "verifyToken:: logon= %s, startTime= %s, expireTime= %s" % ( self.mapping2.get(token)['userid'], self.mapping2.get(token)['startTime'], self.mapping2.get(token)['expireTime'] )
         elif iTokens < max_seats:
 
             now = DateTime()
-            # if it already exists, delete it
+            # if it already exists, add it
             self.mapping1[login]['tokens'].append( token )
-            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
+            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
             
             if self.DEBUG:
                 print "verifyToken:: after activate token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
@@ -409,7 +464,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 self.clearStaleTokens(login)
         else:
             # cannot issue cookie, so clear in browser-side
-            self.setCookie('')
+            #self.setCookie('')
 
             # if the token is not able to be issued because of max_seats filled,
             # then clear stale tokens, and show the message
