@@ -246,6 +246,9 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     
                 # When no cookie is present, attempt to issue a token and use the cookie to store it
                 self.issueToken(login, max_seats, request, response)
+                # if max_seats are filled, then force logout
+                if self.isLoginAtCapacity(login, max_seats):
+                    self.forceLogoutForUser(login, request, response)
     
         return None  # Note that we never return anything useful
     
@@ -421,6 +424,37 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
         self.setCookie(cookie_val)
 
+    security.declarePrivate('forceLogoutForUser')
+    def forceLogoutForUser(self, login, request, response):
+        """ Forces logout. """
+        # Logout the
+        # user by calling resetCredentials.  Note that this
+        # will eventually call our own resetCredentials which
+        # will cleanup our own cookie.
+        try:
+            self.resetAllCredentials(request, response)
+            self._getPAS().plone_utils.addPortalMessage(_(
+                u"The maximum number of simultaneous logins for this user has been exceeded.  You have been \
+                logged out."), "error")
+        except:
+            traceback.print_exc()
+
+    security.declarePrivate('isLoginAtCapacity')
+    def isLoginAtCapacity(self, login, max_seats):
+        """ Returns whether or not the login has filled all available seats. """
+
+        # clear stale tokens to make sure we use the correct token count
+        self.clearStaleTokens(login)
+
+        seat_timeout = 5 # default if there is a problem with the member property
+        iTokens = 0 # assume no tokens are active until proven otherwise
+        existing = self.mapping1.get(login)
+        if existing and 'tokens' in existing:
+            iTokens = len( existing['tokens'] )
+
+        # return whether max_seats have been filled
+        return iTokens >= max_seats
+                
     security.declarePrivate('verifyToken')
     def verifyToken(self, token, login, max_seats, request, response):
         """ Activates a token by putting it in the tokens[] array of mapping1[login] if it is not already present. """
