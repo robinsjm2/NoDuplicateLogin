@@ -84,7 +84,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
     meta_type = 'No Duplicate Login Plugin'
     cookie_name = '__noduplicate'
-    DEBUG = True
+    DEBUG = False
     security = ClassSecurityInfo()
     login_member_data_mapping = None
 
@@ -116,7 +116,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
         self.mapping1 = OOBTree()  # userid : { tokens:[ UID, UID, UID] }
         self.mapping2 = OOBTree()  # UID : { userid: string, startTime: DateTime, expireTime: DateTime }
-        self.login_member_data_mapping = OOBTree()  # userid : { maxSeats: integer, expireTime: DateTime }
+        self.login_member_data_mapping = OOBTree()  # userid : { maxSeats: integer, seatTimeoutInMinutes: float, expireTime: DateTime }
 
         self.plone_session = None  # for plone.session
 
