@@ -224,9 +224,13 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 cookie_val = uuid()
                 # do some cleanup in our mappings
                 existing = self.mapping1.get(login)
+                
                 if existing and 'tokens' in existing:
-                    if existing['tokens'][0] in self.mapping2:
-                        del self.mapping2[existing['tokens'][0]]
+                    try:
+                        if existing['tokens'][0] in self.mapping2:
+                            del self.mapping2[existing['tokens'][0]]
+                    except:
+                        pass
     
                 now = DateTime()
                 self.mapping1[login] = { 'tokens':[] }
