@@ -1,0 +1,15 @@
+<configure
+    xmlns="http://namespaces.zope/org"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    i18n_domain="Products.NoDuplicateLogin">
+
+    <browser:page
+        for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+        name="manage-seats"
+        class=".seats.NoDuplicateLoginSeatsView"
+        template="seats.pt"
+        permission="zope2.View"
+        allowed_attributes=""/>
+
+</configure>
+

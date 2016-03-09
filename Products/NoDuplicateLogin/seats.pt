@@ -1,0 +1,65 @@
+<html xmlns:tal="http://xml.zope.org/namespaces/tal">
+	<head>
+		<title>Manage Sanford Subscription Seats</title>
+	</head>
+	<body tal:define="toLocalizedTime nocall:context/@@plone/toLocalizedTime">
+		<form action="#" method="post">
+			<input id="login" name="login" placeholder="Username" />
+			<input type="submit" value="Show Active" />
+		</form>
+		<hr width="100%" />
+		<!-- If there is a login provided, then build the table -->
+		<div tal:condition="exists:request/form/login"
+			tal:define="login request/form/login | nothing;
+				activeTokens view/no_duplicate_login/mapping1/?login/tokens | nothing">
+			<div>
+				<span tal:content="login"></span>
+				<span tal:condition="exists:view/no_duplicate_login/login_member_data_mapping/?login">
+					<!-- The max allowable seats -->
+					Max seats: <span tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
+						tal:content="python: cached_member_data['maxSeats']"></span>
+					<!-- The session timeout in minutes -->
+					Session Timeout( min. ): <span tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
+						tal:content="python: cached_member_data['seatTimeoutInMinutes']"></span>
+
+					<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
+					Active Token(s): <span tal:content="python:len(activeTokens)">0</span>
+				</span>
+			</div>
+
+			<!-- List the active tokens.  Some of these may be stale. -->
+			<table>
+				<thead>
+					<tr>
+						<th>Token UID</th><th>Started</th><th>Expires</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr tal:repeat="token activeTokens">
+						<div tal:define="tokenInfo view/no_duplicate_login/mapping2/?token | nothing">
+							<td tal:content="token">UID</td>
+	
+							<!-- If tokenInfo exists -->
+							<td tal:condition="tokenInfo">
+								<span tal:content="tokenInfo/startTime">Started</span>
+							</td>
+							<td tal:condition="tokenInfo">
+								<span tal:content="tokenInfo/expireTime">Expires</span>
+							</td>
+							<!-- End exists:tokenInfo -->
+							
+							<!-- If tokenInfo does not exist -->
+							<td tal:condition="not:tokenInfo">
+								<span>Started</span>
+							</td>
+							<td tal:condition="not:tokenInfo">
+								<span>Expires</span>
+							</td>
+							<!-- End not:tokenInfo -->
+						</div>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	</body>
+</html>
