@@ -115,7 +115,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             self.cookie_name = cookie_name
 
         self.mapping1 = OOBTree()  # userid : { tokens:[ UID, UID, UID] }
-        self.mapping2 = OOBTree()  # UID : { userid: string, startTime: DateTime, expireTime: DateTime }
+        self.mapping2 = OOBTree()  # UID : { userid: string, ip: string, startTime: DateTime, expireTime: DateTime }
         self.login_member_data_mapping = OOBTree()  # userid : { maxSeats: integer, seatTimeoutInMinutes: float, expireTime: DateTime }
 
         self.plone_session = None  # for plone.session
@@ -232,10 +232,15 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     except:
                         pass
     
+                try:
+                    from_ip = self.get_ip( request )
+                except:
+                    traceback.print_exc()
+
                 now = DateTime()
                 self.mapping1[login] = { 'tokens':[] }
                 self.mapping1[login]['tokens'].append( cookie_val )
-                self.mapping2[cookie_val] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
+                self.mapping2[cookie_val] = {'userid': login, 'ip': from_ip, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + self.time_to_persist_cookies )}
                 self.setCookie(cookie_val)
         else:
             # Max seats is not 1. Treat this as a floating licenses scenario.
@@ -491,20 +496,25 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         # then go ahead and clear stale tokens for this login
         if not isVerified and iTokens >= max_seats - 1:
             self.clearStaleTokens(login)
+        
+        try:
+            from_ip = self.get_ip(request)
+        except:
+            traceback.print_exc()
 
         if isVerified:
             # just extend it
             now = DateTime()
-            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
+            self.mapping2[token] = {'userid': login, 'ip': from_ip, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
             
             if self.DEBUG:
-                print "verifyToken:: logon= %s, startTime= %s, expireTime= %s" % ( self.mapping2.get(token)['userid'], self.mapping2.get(token)['startTime'], self.mapping2.get(token)['expireTime'] )
+                print "verifyToken:: logon= %s, IP= %s, startTime= %s, expireTime= %s" % ( self.mapping2.get(token)['userid'], from_ip, self.mapping2.get(token)['startTime'], self.mapping2.get(token)['expireTime'] )
         elif iTokens < max_seats:
 
             now = DateTime()
             # if it already exists, add it
             self.mapping1[login]['tokens'].append( token )
-            self.mapping2[token] = {'userid': login, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
+            self.mapping2[token] = {'userid': login, 'ip': from_ip, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
             
             if self.DEBUG:
                 print "verifyToken:: after activate token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
@@ -576,6 +586,25 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             count = cleanStorage(mapping)
 
         return "%s entries deleted." % count
+    
+    security.declarePrivate(Permissions.manage_users, 'get_ip')
+    def get_ip(self, request):
+        """ Extract the client IP address from the HTTP request in a proxy-compatible way.
+        @return: IP address as a string or None if not available"""
+
+        if "HTTP_X_FORWARDED_FOR" in request.environ:
+            # Virtual host
+            ip = request.environ["HTTP_X_FORWARDED_FOR"]
+        elif "HTTP_HOST" in request.environ:
+            # Non-virtualhost
+            ip = request.environ["REMOTE_ADDR"]
+        else:
+            # Should not reach here
+            ip = '0.0.0.0'
+    
+        if self.DEBUG:
+            print "get_ip:: " + ip
+        return ip
 
 classImplements(NoDuplicateLogin,
                 IAuthenticationPlugin,

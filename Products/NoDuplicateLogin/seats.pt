@@ -1,9 +1,11 @@
-<html xmlns:tal="http://xml.zope.org/namespaces/tal">
-	<head>
-		<title>Manage Sanford Subscription Seats</title>
-	</head>
-	<body tal:define="toLocalizedTime nocall:context/@@plone/toLocalizedTime">
-		<form action="#" method="post">
+<html xmlns:tal="http://xml.zope.org/namespaces/tal"
+	xmlns:metal="http://xml.zope.org/namespaces/metal"
+	metal:use-macro="here/prefs_main_template/macros/master">
+
+	<body>
+	<div id="content" metal:fill-slot="prefs_configlet_content">
+		<h1>No Duplicate Login: Max Seats</h1>
+		<form action="@@manage-seats" method="post">
 			<input id="login" name="login" placeholder="Username" />
 			<input type="submit" value="Show Active" />
 		</form>
@@ -23,7 +25,7 @@
 						tal:content="python: cached_member_data['seatTimeoutInMinutes']"></span>
 
 					<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
-					Active Token(s): <span tal:content="python:len(activeTokens)">0</span>
+					Active Token(s): <span tal:content="python:len(activeTokens) if activeTokens else 0">0</span>
 				</span>
 			</div>
 
@@ -31,7 +33,7 @@
 			<table>
 				<thead>
 					<tr>
-						<th>Token UID</th><th>Started</th><th>Expires</th>
+						<th>Token UID</th><th>Started</th><th>Expires</th><th>Originating IP</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -46,6 +48,9 @@
 							<td tal:condition="tokenInfo">
 								<span tal:content="tokenInfo/expireTime">Expires</span>
 							</td>
+							<td tal:condition="tokenInfo">
+								<span tal:content="tokenInfo/ip">IP Address</span>
+							</td>
 							<!-- End exists:tokenInfo -->
 							
 							<!-- If tokenInfo does not exist -->
@@ -55,11 +60,15 @@
 							<td tal:condition="not:tokenInfo">
 								<span>Expires</span>
 							</td>
+							<td tal:condition="not:tokenInfo">
+								<span>IP Address</span>
+							</td>
 							<!-- End not:tokenInfo -->
 						</div>
 					</tr>
 				</tbody>
 			</table>
 		</div>
+	</div>
 	</body>
 </html>
