@@ -113,7 +113,9 @@
 			
 			<!-- Explanation for how tokens are reported since we only clear stale tokens when we need to free up some -->
 			<div class="help-text">
-				The tokens reported on this page include those that are considered "expired".  We only clear stale tokens automatically if we need to free up some seats. This decision was made to favor performance.
+				The tokens reported on this page include those that are considered "expired".
+				We only clear stale tokens automatically if we need to free up some seats. This decision was made to favor performance.
+				If you plan to decrease the amount of seats available, it is also recommended to "Clear All Tokens".
 			</div>
 			
 			<hr class="faded-hrule" width="100%" />
