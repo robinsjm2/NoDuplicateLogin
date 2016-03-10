@@ -4,6 +4,21 @@
 
 	<body>
 	<div id="content" metal:fill-slot="prefs_configlet_content">
+		<!-- Could not add the style in using fill-slot="style_slot" for some reason -->
+		<style type="text/css">
+		    .lg-number {font-size: 2.7em;}
+		    .center-text {text-align: center;}
+		    tr.bg-white, table.listing tbody tr.odd.bg-white td {padding: 24px; background: #fff; background-color: #fff;}
+		    table.listing {-webkit-box-shadow: 0px 2px 10px -1px rgba(0,0,0,0.75);
+					-moz-box-shadow: 0px 2px 10px -1px rgba(0,0,0,0.75);
+					box-shadow: 0px 2px 10px -1px rgba(0,0,0,0.75);}
+		    img#user-icon {vertical-align: middle;}
+
+		    .align-right{text-align: right;}
+		    
+		    .display-inline form{display: inline-block;}
+		</style>
+			
 		<a href="plone_control_panel">Site Setup</a>
 		
 		<h1>No Duplicate Login: Max Seats</h1>
@@ -19,19 +34,53 @@
 			tal:define="login request/form/login | nothing;
 				activeTokens view/no_duplicate_login/mapping1/?login/tokens | nothing">
 			<div>
-				<h3>Listing for user:</h3><span tal:content="login"></span><br/>
-				<span tal:condition="exists:view/no_duplicate_login/login_member_data_mapping/?login">
-					<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
-					<b>Active Token(s):</b> <span tal:content="python:len(activeTokens) if activeTokens else 0">0</span>
+				<h3>Listing for user:</h3>
 
-					<!-- The max allowable seats -->
-					<b>Max seats:</b> <span tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
-						tal:content="python: cached_member_data['maxSeats']"></span>
-					<!-- The session timeout in minutes -->
-					<b>Session Timeout( min. ):</b> <span tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
-						tal:content="python: cached_member_data['seatTimeoutInMinutes']"></span>
+				<div><img id="user-icon" alt="User icon" src="group.png" /><span tal:content="login">Username</span></div><br/><br/>
+				<span tal:condition="exists:view/no_duplicate_login/login_member_data_mapping/?login">
+					<table class="listing">
+					<thead>
+						<tr>
+							<th>Active Token(s)</th><th>Max seats</th><th>Session Timeout( min. )</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr class="bg-white">
+							<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
+							<td class="center-text"><span class="lg-number" tal:content="python:len(activeTokens) if activeTokens else 0">0</span></td>
+		
+							<!-- The max allowable seats -->
+							<td class="center-text"><span class="lg-number" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
+								tal:content="python: cached_member_data['maxSeats']"></span></td>
+							<!-- The session timeout in minutes -->
+							<td class="center-text"><span class="lg-number" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
+								tal:content="python: cached_member_data['seatTimeoutInMinutes']"></span></td>
+						</tr>
+					</tbody>
+					</table>
 				</span>
 			</div>
+			
+			<div class="align-right display-inline">
+				<!-- Clear all tokens for login -->
+				<form action="@@manage-seats" method="post">
+					<input tal:attributes="value login" type="hidden" name="login" id="login" />
+					<input type="hidden" name="action" id="action" value="clearAllTokens" />
+					<input type="submit" onclick="return confirm('Are you sure that you want to clear all tokens for this user?');" name="btnClearAllTokens" id="btnClearAllTokens" value="Clear All Tokens" />
+				</form>
+				<!-- Clear stale tokens for login -->
+				<form action="@@manage-seats" method="post">
+					<input tal:attributes="value login" type="hidden" name="login" id="login" />
+					<input type="hidden" name="action" id="action" value="clearStaleTokens" />
+					<input type="submit" onclick="return confirm('Are you sure that you want to clear stale tokens for this user?');" name="btnClearStaleTokens" id="btnClearStaleTokens" value="Clear Stale Tokens" />
+				</form>
+				<!-- Refresh for login -->
+				<form action="@@manage-seats" method="post">
+					<input tal:attributes="value login" type="hidden" name="login" id="login" />
+					<input type="hidden" name="action" id="action" value="refresh" />
+					<input type="submit" name="btnRefresh" id="btnRefresh" value="Refresh" />
+				</form>
+			</div><br/>
 
 			<!-- List the active tokens.  Some of these may be stale. -->
 			<table class="listing">

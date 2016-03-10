@@ -419,6 +419,31 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     # remove from the active tokens for the given login
                     self.mapping1[login]['tokens'].remove(token)
                     del self.mapping2[token]
+    
+    security.declarePrivate('clearAllTokensForUser')
+    def clearAllTokensForUser(self, login):
+        """Clear all tokens for a specific user."""
+        if self.DEBUG:
+            print "clearAllTokensForUser:: " + login
+
+        existing = self.mapping1.get(login, None)
+        
+        if existing and 'tokens' in existing:
+            # for each token, remove if stale
+            for token in existing['tokens']:
+                tokenInfo = self.mapping2.get( token, None )
+                
+                now = DateTime()
+                
+                # remove it from the active tokens
+                if self.DEBUG:
+                    print "clearAllTokensForUser:: Remove token (%s) because it was orphaned." % (token)
+                # remove from the active tokens for the given login
+                self.mapping1[login]['tokens'].remove(token)
+
+                # if there is also a corresponding mapping for tokenInfo, then delete the mapping
+                if tokenInfo:
+                    del self.mapping2[token]
 
     security.declarePrivate('issueToken')
     def issueToken(self, login, max_seats, request, response):
