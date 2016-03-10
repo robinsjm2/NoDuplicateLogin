@@ -9,7 +9,7 @@
         name="manage-seats"
         class=".seats.NoDuplicateLoginSeatsView"
         template="seats.pt"
-        permission="zope2.View"
+        permission="zope2.ManageUsers"
         allowed_attributes=""/>
 
     <genericsetup:registerProfile
