@@ -390,6 +390,14 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         if self.DEBUG:
             print "setCookie():: " + str(value)
     
+    security.declarePrivate('clearSeatsPropertiesForLogin')
+    def clearSeatsPropertiesForLogin(self, login):
+        """ Clears the cached seats properties for the given user. """
+        isCached = self.login_member_data_mapping and self.login_member_data_mapping.get(login, None) is not None
+
+        if isCached:
+            del self.login_member_data_mapping[login]
+
     security.declarePrivate('clearStaleTokens')
     def clearStaleTokens(self, login):
         """Clear tokens that should be expired or that have no corresponding mapping and thus have been orphaned."""
