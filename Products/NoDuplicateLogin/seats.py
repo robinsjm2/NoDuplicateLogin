@@ -45,7 +45,12 @@ class NoDuplicateLoginSeatsView(BrowserPage):
         action = self.request.get("action", None)
         login = self.request.get("login", "")
         max_seats = self.request.get("max-seats", 1)
-        seats_timeout = self.request.get("seats-timeout", 5)
+
+        # For multiple seats, the default timeout is 5 minutes managed per user, whereas with single seats it is a static value belonging to the PAS plugin.
+        if max_seats != 1:
+            seats_timeout = self.request.get("seats-timeout", 5)
+        else:
+            seats_timeout = self.no_duplicate_login.default_minutes_to_persist
 
         if action == "clearAllTokens":
             try:

@@ -96,9 +96,11 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
     # UIDs older than 30 minutes are deleted from our storage; this can also be set per member data property (which default to 5 minutes)...
     if DEBUG:
-        time_to_persist_cookies = datetime.timedelta(minutes=5)
+        default_minutes_to_persist = 5
     else:
-        time_to_persist_cookies = datetime.timedelta(minutes=30)
+        default_minutes_to_persist = 30
+
+    time_to_persist_cookies = datetime.timedelta(minutes=default_minutes_to_persist)
 
     # XXX I wish I had a better explanation for this, but disabling this makes
     # both the ZMI (basic auth) work and the NoDuplicateLogin work.

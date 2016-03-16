@@ -2,7 +2,7 @@
 	xmlns:metal="http://xml.zope.org/namespaces/metal"
 	metal:use-macro="here/prefs_main_template/macros/master">
 
-	<body>
+	<body onload="init();">
 	<div id="content" metal:fill-slot="prefs_configlet_content">
 		<!-- Could not add the style in using fill-slot="style_slot" for some reason -->
 		<style type="text/css">
@@ -40,6 +40,30 @@
 			function showEditSeats(){
 				$('#edit-seats').removeClass("hidden");
 				$('#list-seats').addClass("hidden");
+				
+				validateMaxSeats();
+			}
+
+			// maxSeatsWasUpdated() - this is triggered when the max-seats form input changes
+			function maxSeatsWasUpdated(){
+				validateMaxSeats();
+			}
+
+			// validateMaxSeats() - this validates the form components for max seats form
+			function validateMaxSeats(){
+				var maxSeats = $('#max-seats').val();
+
+				if( maxSeats == "1" ){
+					$('#seats-timeout').prop('disabled', true);
+				}else{
+					$('#seats-timeout').prop('disabled', false);
+				}
+			}
+
+			// init() - this is triggered when the page has loaded
+			function init(){
+				// makes sure that the seats timeout is appropriate for the max_seats value
+				validateMaxSeats();
 			}
 		</script>
 			
@@ -78,7 +102,7 @@
 								tal:content="python: cached_member_data['maxSeats']"></span></td>
 							<!-- The session timeout in minutes -->
 							<td class="center-text"><span class="lg-number" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
-								tal:content="python: cached_member_data['seatTimeoutInMinutes']"></span></td>
+								tal:content="python: cached_member_data['seatTimeoutInMinutes'] if cached_member_data['maxSeats'] != 1 else view.no_duplicate_login.default_minutes_to_persist"></span></td>
 								
 							<!-- The actions for listing -->
 							<td colspan="2">
@@ -91,11 +115,12 @@
 								<td class="center-text"><span class="lg-number" tal:content="python:len(activeTokens) if activeTokens else 0">0</span></td>
 			
 								<!-- The max allowable seats -->
-								<td class="center-text"><input type="number" class="lg-number" id="max-seats" name="max-seats" size="4" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
+								<td class="center-text"><input type="number" onkeyup="maxSeatsWasUpdated();" class="lg-number" id="max-seats" name="max-seats" size="4" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
 									tal:attributes="value python: cached_member_data['maxSeats']; placeholder python: cached_member_data['maxSeats']" /></td>
 								<!-- The session timeout in minutes -->
 								<td class="center-text"><input type="number" class="lg-number" id="seats-timeout" name="seats-timeout" size="4" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
-									tal:attributes="value python: cached_member_data['seatTimeoutInMinutes']; placeholder python: cached_member_data['seatTimeoutInMinutes']" /></td>
+									tal:attributes="value python: cached_member_data['seatTimeoutInMinutes'] if cached_member_data['maxSeats'] != 1 else view.no_duplicate_login.default_minutes_to_persist;
+											placeholder python: cached_member_data['seatTimeoutInMinutes'] if cached_member_data['maxSeats'] != 1 else view.no_duplicate_login.default_minutes_to_persist" /></td>
 									
 								<!-- The actions for editing -->
 								<td colspan="2" class="display-inline">
