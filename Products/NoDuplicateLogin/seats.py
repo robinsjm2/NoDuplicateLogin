@@ -61,6 +61,11 @@ class NoDuplicateLoginSeatsView(BrowserPage):
             try:
                 seats_state = {'max_seats': int( max_seats ), 'seat_timeout_in_minutes': float( seats_timeout )}
                 self.saveSeatsForUser( login, seats_state )
+                
+                # Clear all tokens for user since the timeouts and max_seats changed.
+                # If this is not done, then existing sessions could be kept alive even if more seats than the new max.
+                # This is because they are only checked against max_seats when they are being activated (not while they are being kept active through continued use). 
+                self.no_duplicate_login.clearAllTokensForUser(login)
             except:
                 traceback.print_exc()
 
