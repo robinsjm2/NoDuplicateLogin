@@ -283,7 +283,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             seat_timeout = cached_member_data['seatTimeoutInMinutes']
         else:
             mtool = getToolByName(self, 'portal_membership')
-            member = mtool.getMemberById(login)
+            member = self.getMember(login)
             # get the max_seats property from the member data tool
             if member is not None:
                 max_seats = member.getProperty("max_seats")
@@ -294,6 +294,50 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
         return { 'maxSeats': int( max_seats ), 'seatTimeoutInMinutes': float( seat_timeout ) }
 
+    def getMember(self, email):
+	""" Returns a member object for the given username """
+	member = None
+	
+	# try to get the member if it exists
+	mtool = self.context.portal_membership
+	
+	memberInfo = mtool.searchMembers('email', email)
+	
+	# try by email first
+	try:
+	    memberId = memberInfo[0]['username']
+	    member = mtool.getMemberById( memberId )
+	except:
+	    member = None
+	    pass
+	
+	if member == None:
+	    memberInfo = mtool.searchMembers('username', email)
+	
+	    # try by username if not found by email (should be same but sometimes are not)
+	    try:
+		memberId = memberInfo[0]['username']
+		member = mtool.getMemberById( memberId )
+	    except:
+		member = None
+		pass
+	
+	# If the member was not found by email or username, then check the actual login_name stored in acl_users
+	# Try to find this user via the login name.
+	acl = self.context.acl_users
+	if member == None:
+	    userids = [user.get('userid') for user in
+		       acl.searchUsers(login=email, exact_match=False)
+		       if user.get('userid')]
+	    for userid in userids:
+		memberRecord = mtool.getMemberById(userid)
+		# must check that the login name is the same without regards to case since exact_match may return even partial matches
+		if memberRecord is not None and email.lower() == memberRecord.getProperty('email').lower():
+		    member = memberRecord
+		    break
+	
+	return member
+    
     security.declarePrivate('getMaxSeatsForLogin')
     def getMaxSeatsForLogin(self, login):
         """Returns the max_seats property for a given login
