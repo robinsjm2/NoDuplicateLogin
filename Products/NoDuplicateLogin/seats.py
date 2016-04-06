@@ -13,6 +13,7 @@ logger = logging.getLogger('Products.NoDuplicateLogin')
 class NoDuplicateLoginSeatsView(BrowserPage):
 
     index = ViewPageTemplateFile("seats.pt")
+    DEBUG = False
 
     def __init__(self, context, request):
         self.context = context
@@ -33,6 +34,8 @@ class NoDuplicateLoginSeatsView(BrowserPage):
     
     def updateSeatsCacheForLogin(self, login):
         """ Create or refresh the cached details for max_seats and other seats_state properties """
+        if self.DEBUG:
+            print "NoDuplicateLoginSeatsView:: updateSeatsCacheForLogin( %s )" % (login)
         # remove the current cache
         self.no_duplicate_login.clearSeatsPropertiesForLogin(login)
 
@@ -45,6 +48,12 @@ class NoDuplicateLoginSeatsView(BrowserPage):
         action = self.request.get("action", None)
         login = self.request.get("login", "")
         max_seats = self.request.get("max-seats", 1)
+        self.shouldShowDebugInfo = self.request.get("showDebugInfo", False)
+        
+        # add logging when DEBUG is turned on
+        if self.DEBUG:
+            print "NoDuplicateLoginSeatsView::__call__"
+            print "action: %s, login: %s, max_seats: %i" % (action, login, max_seats)
 
         # For multiple seats, the default timeout is 5 minutes managed per user, whereas with single seats it is a static value belonging to the PAS plugin.
         if max_seats != 1:
@@ -74,8 +83,13 @@ class NoDuplicateLoginSeatsView(BrowserPage):
             except:
                 traceback.print_exc()
 
+        if self.DEBUG:
+            print "Completed action: %s" % action
+
         # update the seats_state cache
         if len( login ) > 0:
+            if self.DEBUG:
+                print "Attempt to call updateSeatsCacheForLogin( %s )" % login
             try:
                 self.updateSeatsCacheForLogin(login)
             except:

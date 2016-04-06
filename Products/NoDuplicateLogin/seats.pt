@@ -206,6 +206,38 @@
 				</tbody>
 			</table>
 		</div>
+		
+		<!-- ADVANCED DEBUG INFO : HIDDEN BY DEFAULT -->
+		<div tal:condition="view/shouldShowDebugInfo">
+			<h1>DEBUG INFO</h1>
+			
+			<h3>Login Member Data</h3>
+			<div tal:condition="exists: view/no_duplicate_login/login_member_data_mapping">
+				<table class="listing">
+				<thead>
+					<tr>
+						<th>Login</th><th>Max seats</th><th>Session Timeout( min. )</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr tal:repeat="login view/no_duplicate_login/login_member_data_mapping/keys" id="list-seats" class="bg-white">
+						<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
+						<td class="center-text"><span class="lg-number" tal:content="login">login name</span></td>
+	
+						<!-- The max allowable seats -->
+						<td class="center-text"><span class="lg-number"
+						        tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
+							tal:content="python: cached_member_data['maxSeats']"></span></td>
+						<!-- The session timeout in minutes -->
+						<td class="center-text"><span class="lg-number"
+							tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
+							tal:content="python: cached_member_data['seatTimeoutInMinutes'] if cached_member_data['maxSeats'] != 1 else view.no_duplicate_login.default_minutes_to_persist"></span></td>
+					</tr>
+				</tbody>
+				</table>
+			</div>
+			
+		</div>
 	</div>
 	</body>
 </html>
