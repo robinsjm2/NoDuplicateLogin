@@ -25,7 +25,7 @@ class NoDuplicateLoginSeatsView(BrowserPage):
 	member = None
 	
 	# try to get the member if it exists
-	mtool = self.context.portal_membership
+	mtool = getToolByName(self, 'portal_membership')
 	
 	memberInfo = mtool.searchMembers('email', email)
 	
@@ -70,7 +70,6 @@ class NoDuplicateLoginSeatsView(BrowserPage):
 
     def saveSeatsForUser(self, login, seats_state):
         """ Saves the member properties defined in seats_state to the database. """
-        mtool = getToolByName(self, 'portal_membership')
         member = self.getMember(login)
         # get the max_seats property from the member data tool
         if member is not None:

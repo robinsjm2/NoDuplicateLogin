@@ -49,6 +49,7 @@ from plone.keyring.interfaces import IKeyManager
 from urllib import quote, unquote
 from utils import uuid
 from zope.component import queryUtility
+from zope.app.component.hooks import getSite
 import datetime
 import time
 import traceback
@@ -282,7 +283,6 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             max_seats = cached_member_data['maxSeats']
             seat_timeout = cached_member_data['seatTimeoutInMinutes']
         else:
-            mtool = getToolByName(self, 'portal_membership')
             member = self.getMember(login)
             # get the max_seats property from the member data tool
             if member is not None:
@@ -299,7 +299,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 	member = None
 	
 	# try to get the member if it exists
-	mtool = self.context.portal_membership
+	mtool = getToolByName(self, 'portal_membership')
 	
 	memberInfo = mtool.searchMembers('email', email)
 	
@@ -324,7 +324,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 	
 	# If the member was not found by email or username, then check the actual login_name stored in acl_users
 	# Try to find this user via the login name.
-	acl = self.context.acl_users
+        self.portal = getSite()
+	acl = self.portal.acl_users
 	if member == None:
 	    userids = [user.get('userid') for user in
 		       acl.searchUsers(login=email, exact_match=False)
