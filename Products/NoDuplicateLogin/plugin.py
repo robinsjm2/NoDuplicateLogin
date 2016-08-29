@@ -49,10 +49,16 @@ from plone.keyring.interfaces import IKeyManager
 from urllib import quote, unquote
 from utils import uuid
 from zope.component import queryUtility
-from zope.app.component.hooks import getSite
 import datetime
 import time
 import traceback
+
+try:
+ # Plone < 4.3
+ from zope.app.component.hooks import getSite
+except ImportError:
+ # Plone >= 4.3
+ from zope.component.hooks import getSite  # NOQA
 
 manage_addNoDuplicateLoginForm = PageTemplateFile(
     'www/noduplicateloginAdd',
