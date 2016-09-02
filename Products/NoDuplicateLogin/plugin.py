@@ -53,6 +53,9 @@ import datetime
 import time
 import traceback
 
+from plone.protect.interfaces import IDisableCSRFProtection
+from zope.interface import alsoProvides
+
 try:
  # Plone < 4.3
  from zope.app.component.hooks import getSite
@@ -78,6 +81,7 @@ def manage_addNoDuplicateLogin(dispatcher,
     dispatcher._setObject(obj.getId(), obj)
 
     if REQUEST is not None:
+        alsoProvides(REQUEST, IDisableCSRFProtection)
         REQUEST['RESPONSE'].redirect('%s/manage_workspace?manage_tabs_message='
                                      'NoDuplicateLogin+plugin+added.'
                                      % dispatcher.absolute_url())
@@ -140,6 +144,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
           ILoginPasswordExtractionPlugin.
         """
         request = self.REQUEST
+	alsoProvides(request, IDisableCSRFProtection)
+
         response = request['RESPONSE']
         pas_instance = self._getPAS()
 
@@ -372,6 +378,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
     def resetCredentials(self, request, response):
         """See ICredentialsResetPlugin.
         """
+	alsoProvides(request, IDisableCSRFProtection)
+
         if self.DEBUG:
             print "resetCredentials()::"
 
@@ -403,6 +411,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         # pas_instance.resetCredentials() will not do anything because
         # the user is still anonymous.  (I think it should do
         # something nevertheless.)
+
+	alsoProvides(request, IDisableCSRFProtection)
         pas_instance = self._getPAS()
         plugins = pas_instance._getOb('plugins')
         cred_resetters = plugins.listPlugins(ICredentialsResetPlugin)
@@ -416,6 +426,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         session, depending on policy.
         """
         request = self.REQUEST
+	alsoProvides(request, IDisableCSRFProtection)
+
         cookie = request.get(self.cookie_name, '')
         
         if self.DEBUG:
@@ -433,6 +445,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         """
         value = quote(value)
         request = self.REQUEST
+	alsoProvides(request, IDisableCSRFProtection)
+
         response = request['RESPONSE']
 
         if value:
@@ -512,6 +526,9 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         """
         # When no cookie is present, we generate one, store it and
         # set it in the response:
+
+	alsoProvides(request, IDisableCSRFProtection)
+
         cookie_val = uuid()
 
         if self.DEBUG:
@@ -526,6 +543,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         # user by calling resetCredentials.  Note that this
         # will eventually call our own resetCredentials which
         # will cleanup our own cookie.
+
+	alsoProvides(request, IDisableCSRFProtection)
         try:
             self.resetAllCredentials(request, response)
             self._getPAS().plone_utils.addPortalMessage(_(
@@ -553,6 +572,8 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
     security.declarePrivate('verifyToken')
     def verifyToken(self, token, login, max_seats, request, response):
         """ Activates a token by putting it in the tokens[] array of mapping1[login] if it is not already present. """
+
+	alsoProvides(request, IDisableCSRFProtection)
 
         isVerified = False # it is verified if it is already in the active tokens list server-side
         seat_timeout = 5 # default if there is a problem with the member property

@@ -4,6 +4,8 @@ from zope.publisher.browser import BrowserPage
 from DateTime import DateTime
 
 from Products.CMFCore.utils import getToolByName
+from plone.protect.interfaces import IDisableCSRFProtection
+from zope.interface import alsoProvides
 
 import traceback
 import logging
@@ -16,6 +18,7 @@ class NoDuplicateLoginSeatsView(BrowserPage):
     DEBUG = False
 
     def __init__(self, context, request):
+	alsoProvides(request, IDisableCSRFProtection)
         self.context = context
         self.request = request
         self.no_duplicate_login = context.unrestrictedTraverse("acl_users/no_duplicate_login")
