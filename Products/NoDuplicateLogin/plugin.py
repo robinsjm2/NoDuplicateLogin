@@ -52,6 +52,7 @@ from zope.component import queryUtility
 import datetime
 import time
 import traceback
+from plone import api
 
 from plone.protect.interfaces import IDisableCSRFProtection
 from zope.interface import alsoProvides
@@ -194,7 +195,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             login = info['login']
 
         cookie_val = self.getCookie()
-        
+
         # get max seats from member data property or cache and default to 1 if not set
         try:
             max_seats = self.getMaxSeatsForLogin(login)
@@ -211,11 +212,11 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                 # in our mapping, it's fine.  Otherwise we'll force a
                 # logout.
                 existing = self.mapping1.get(login, None)
-                
+
                 if self.DEBUG:
                     if existing:
                         print "authenticateCredentials():: cookie_val is " + cookie_val + ", and active tokens are: " + ', '.join( existing['tokens'] )
-                
+
                 if existing and cookie_val not in existing['tokens']:
                     # The cookies values differ, we want to logout the
                     # user by calling resetCredentials.  Note that this
@@ -232,21 +233,21 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     # The browser has the cookie but we don't know about
                     # it.  Let's reset our own cookie:
                     self.setCookie('')
-    
+
             else:
                 # When no cookie is present, we generate one, store it and
                 # set it in the response:
                 cookie_val = uuid()
                 # do some cleanup in our mappings
                 existing = self.mapping1.get(login)
-                
+
                 if existing and 'tokens' in existing:
                     try:
                         if existing['tokens'][0] in self.mapping2:
                             del self.mapping2[existing['tokens'][0]]
                     except:
                         pass
-    
+
                 try:
                     from_ip = self.get_ip( request )
                 except:
@@ -267,17 +268,18 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             else:
                 if self.DEBUG:
                     print "authenticateCredentials:: Try to issue a token because there is no cookie value."
-                    
+
                 # When no cookie is present, attempt to issue a token and use the cookie to store it
                 self.issueToken(login, max_seats, request, response)
                 # if max_seats are filled, then force logout
                 if self.isLoginAtCapacity(login, max_seats):
                     self.forceLogoutForUser(login, request, response)
-    
+
         return None  # Note that we never return anything useful
-    
+
     security.declarePrivate('getSeatsPropertiesForLogin')
     def getSeatsPropertiesForLogin(self, login):
+
         # initialize max_seats at 1
         max_seats = 1
         seat_timeout = 5 # initialize to 5 minutes
@@ -286,10 +288,10 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             self.login_member_data_mapping = OOBTree() # if this has not been initialized then do it now
             if self.DEBUG:
                 print "Initialized the Login Member Data Mapping"
-  
+
         # if the max_seats has a valid cached value, then use it
         cached_member_data = self.login_member_data_mapping.get(login, None)
-        
+
         now = DateTime()
         if cached_member_data and 'expireTime' in cached_member_data and 'maxSeats' in cached_member_data and 'seatTimeoutInMinutes' in cached_member_data and now < cached_member_data['expireTime']:
             max_seats = cached_member_data['maxSeats']
@@ -308,67 +310,35 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
     def getMember(self, email):
 	""" Returns a member object for the given username """
-	member = None
-	
-	# try to get the member if it exists
-	mtool = getToolByName(self, 'portal_membership')
-	
-	memberInfo = mtool.searchMembers('email', email)
-	
-	# try by email first
-	try:
-	    memberId = memberInfo[0]['username']
-	    member = mtool.getMemberById( memberId )
-	except:
-	    member = None
-	    pass
-	
-	if member == None:
-	    memberInfo = mtool.searchMembers('username', email)
-	
-	    # try by username if not found by email (should be same but sometimes are not)
-	    try:
-		memberId = memberInfo[0]['username']
-		member = mtool.getMemberById( memberId )
-	    except:
-		member = None
-		pass
-	
-	# If the member was not found by email or username, then check the actual login_name stored in acl_users
-	# Try to find this user via the login name.
-        self.portal = getSite()
-	acl = self.portal.acl_users
-	if member == None:
-	    userids = [user.get('userid') for user in
-		       acl.searchUsers(login=email, exact_match=False)
-		       if user.get('userid')]
-	    for userid in userids:
-		memberRecord = mtool.getMemberById(userid)
-		# must check that the login name is the same without regards to case since exact_match may return even partial matches
-		if memberRecord is not None and email.lower() == memberRecord.getProperty('email').lower():
-		    member = memberRecord
-		    break
-	
-	return member
-    
+
+    	member = None
+
+        try:
+            member = api.user.get(username=email)
+        except:
+            if self.DEBUG:
+                traceback.print_exc()
+
+    	return member
+
     security.declarePrivate('getMaxSeatsForLogin')
     def getMaxSeatsForLogin(self, login):
         """Returns the max_seats property for a given login
         """
         seats_properties = self.getSeatsPropertiesForLogin(login)
         max_seats = 1 # default to 1 seat
-        
+
         if seats_properties and 'maxSeats' in seats_properties:
             max_seats = seats_properties['maxSeats']
         return max_seats
-    
+
     security.declarePrivate('getSeatTimeoutInMinutesForLogin')
     def getSeatTimeoutInMinutesForLogin(self, login):
         """Returns the seat_timeout_in_minutes property for a given login
         """
         seats_properties = self.getSeatsPropertiesForLogin(login)
         seat_timeout_in_minutes = 5 # default to 5 minutes
-        
+
         if seats_properties and 'seatTimeoutInMinutes' in seats_properties:
             seat_timeout_in_minutes = seats_properties['seatTimeoutInMinutes']
         return seat_timeout_in_minutes
@@ -429,10 +399,10 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 	alsoProvides(request, IDisableCSRFProtection)
 
         cookie = request.get(self.cookie_name, '')
-        
+
         if self.DEBUG:
             print "getCookie():: " + str(unquote(cookie))
-        
+
         return unquote(cookie)
 
     security.declarePrivate('setCookie')
@@ -453,10 +423,10 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             response.setCookie(self.cookie_name, value, path='/')
         else:
             response.expireCookie(self.cookie_name, path='/')
-            
+
         if self.DEBUG:
             print "setCookie():: " + str(value)
-    
+
     security.declarePrivate('clearSeatsPropertiesForLogin')
     def clearSeatsPropertiesForLogin(self, login):
         """ Clears the cached seats properties for the given user. """
@@ -472,14 +442,14 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             print "clearStaleTokens:: " + login
 
         existing = self.mapping1.get(login, None)
-        
+
         if existing and 'tokens' in existing:
             # for each token, remove if stale
             for token in existing['tokens']:
                 tokenInfo = self.mapping2.get( token, None )
-                
+
                 now = DateTime()
-                
+
                 # if the token info does not exist, then remove it from the active tokens
                 if tokenInfo is None:
                     if self.DEBUG:
@@ -494,7 +464,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     # remove from the active tokens for the given login
                     self.mapping1[login]['tokens'].remove(token)
                     del self.mapping2[token]
-    
+
     security.declarePrivate('clearAllTokensForUser')
     def clearAllTokensForUser(self, login):
         """Clear all tokens for a specific user."""
@@ -502,14 +472,14 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             print "clearAllTokensForUser:: " + login
 
         existing = self.mapping1.get(login, None)
-        
+
         if existing and 'tokens' in existing:
             # for each token, remove if stale
             for token in existing['tokens']:
                 tokenInfo = self.mapping2.get( token, None )
-                
+
                 now = DateTime()
-                
+
                 # remove it from the active tokens
                 if self.DEBUG:
                     print "clearAllTokensForUser:: Remove token (%s) because it was orphaned." % (token)
@@ -568,7 +538,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
         # return whether max_seats have been filled
         return iTokens >= max_seats
-                
+
     security.declarePrivate('verifyToken')
     def verifyToken(self, token, login, max_seats, request, response):
         """ Activates a token by putting it in the tokens[] array of mapping1[login] if it is not already present. """
@@ -581,9 +551,9 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         existing = self.mapping1.get(login)
         if existing and 'tokens' in existing:
             iTokens = len( existing['tokens'] )
-            
+
             isVerified = token in existing['tokens']
-            
+
             if self.DEBUG:
                 print "authenticateCredentials():: cookie_val is " + token + ", and active tokens are: " + ', '.join( existing['tokens'] )
         else:
@@ -591,19 +561,19 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
 
         if self.DEBUG:
             print "verifyToken:: login = %s, active = %i, max = %i" % (login, iTokens, max_seats)
-            
+
         try:
             # for seats > 1, use member property for cookie timeout value
             seat_timeout = self.getSeatTimeoutInMinutesForLogin(login)
             td_seat_timeout = datetime.timedelta(minutes=seat_timeout)
         except:
             pass
-        
+
         # if this is the last token to issue,
         # then go ahead and clear stale tokens for this login
         if not isVerified and iTokens >= max_seats - 1:
             self.clearStaleTokens(login)
-        
+
         try:
             from_ip = self.get_ip(request)
         except:
@@ -613,7 +583,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             # just extend it
             now = DateTime()
             self.mapping2[token] = {'userid': login, 'ip': from_ip, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
-            
+
             if self.DEBUG:
                 print "verifyToken:: logon= %s, IP= %s, startTime= %s, expireTime= %s" % ( self.mapping2.get(token)['userid'], from_ip, self.mapping2.get(token)['startTime'], self.mapping2.get(token)['expireTime'] )
         elif iTokens < max_seats:
@@ -622,7 +592,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             # if it already exists, add it
             self.mapping1[login]['tokens'].append( token )
             self.mapping2[token] = {'userid': login, 'ip': from_ip, 'startTime': now, 'expireTime': DateTime( now.asdatetime() + td_seat_timeout )}
-            
+
             if self.DEBUG:
                 print "verifyToken:: after activate token, active tokens = " + ', '.join(self.mapping1[login]['tokens'])
 
@@ -647,7 +617,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     logged out."), "error")
             except:
                 traceback.print_exc()
-    
+
     security.declareProtected(Permissions.manage_users, 'clearAllTokens')
     def clearAllTokens(self):
         """Clear all server side tokens.  Use only in testing."""
@@ -679,7 +649,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
                     count += 1
                 elif 'expireTime' in obj and obj['expireTime'] < now:
                     del mapping[key]
-                    
+
                     # if the mapping2 deletes its token by UID, make sure that the mapping1 removes that token as well
                     for userid, info in self.mapping1.items():
                         try:
@@ -693,7 +663,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
             count = cleanStorage(mapping)
 
         return "%s entries deleted." % count
-    
+
     security.declarePrivate(Permissions.manage_users, 'get_ip')
     def get_ip(self, request):
         """ Extract the client IP address from the HTTP request in a proxy-compatible way.
@@ -708,7 +678,7 @@ class NoDuplicateLogin(BasePlugin, Cacheable):
         else:
             # Should not reach here
             ip = '0.0.0.0'
-    
+
         if self.DEBUG:
             print "get_ip:: " + ip
         return ip
