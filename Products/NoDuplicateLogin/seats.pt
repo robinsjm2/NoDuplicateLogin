@@ -16,11 +16,11 @@
 		    img#user-icon {vertical-align: middle;}
 
 		    .align-right{text-align: right;}
-		    
+
 		    .display-inline form{display: inline-block;}
-		    
+
 		    .hidden {display: none;}
-		    
+
 		    #active-tokens {width:100%;}
 
 		    .faded-hrule {height:1px; margin: 2em 0em; background: #ccc;}
@@ -40,7 +40,7 @@
 			function showEditSeats(){
 				$('#edit-seats').removeClass("hidden");
 				$('#list-seats').addClass("hidden");
-				
+
 				validateMaxSeats();
 			}
 
@@ -66,9 +66,9 @@
 				validateMaxSeats();
 			}
 		</script>
-			
+
 		<a href="plone_control_panel">Site Setup</a>
-		
+
 		<h1>No Duplicate Login: Max Seats</h1>
 		<form action="@@manage-seats" method="post">
 			<input id="login" name="login" placeholder="Username" />
@@ -86,6 +86,7 @@
 
 				<div><img id="user-icon" alt="User icon" src="group.png" /><span tal:content="login">Username</span></div><br/><br/>
 				<span tal:condition="exists:view/no_duplicate_login/login_member_data_mapping/?login">
+					<form action="@@manage-seats" method="post">
 					<table class="listing">
 					<thead>
 						<tr>
@@ -96,24 +97,23 @@
 						<tr id="list-seats" class="bg-white">
 							<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
 							<td class="center-text"><span class="lg-number" tal:content="python:len(activeTokens) if activeTokens else 0">0</span></td>
-		
+
 							<!-- The max allowable seats -->
 							<td class="center-text"><span class="lg-number" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
 								tal:content="python: cached_member_data['maxSeats']"></span></td>
 							<!-- The session timeout in minutes -->
 							<td class="center-text"><span class="lg-number" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
 								tal:content="python: cached_member_data['seatTimeoutInMinutes'] if cached_member_data['maxSeats'] != 1 else view.no_duplicate_login.default_minutes_to_persist"></span></td>
-								
+
 							<!-- The actions for listing -->
 							<td colspan="2">
 								<input type="button" onclick="showEditSeats();" alt="Edit seats" value="Edit" />
 							</td>
 						</tr>
 						<tr id="edit-seats" class="bg-white hidden">
-							<form action="@@manage-seats" method="post">
 								<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
 								<td class="center-text"><span class="lg-number" tal:content="python:len(activeTokens) if activeTokens else 0">0</span></td>
-			
+
 								<!-- The max allowable seats -->
 								<td class="center-text"><input type="number" onkeyup="maxSeatsWasUpdated();" class="lg-number" id="max-seats" name="max-seats" size="4" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
 									tal:attributes="value python: cached_member_data['maxSeats']; placeholder python: cached_member_data['maxSeats']" /></td>
@@ -121,30 +121,31 @@
 								<td class="center-text"><input type="number" class="lg-number" id="seats-timeout" name="seats-timeout" size="4" tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
 									tal:attributes="value python: cached_member_data['seatTimeoutInMinutes'] if cached_member_data['maxSeats'] != 1 else view.no_duplicate_login.default_minutes_to_persist;
 											placeholder python: cached_member_data['seatTimeoutInMinutes'] if cached_member_data['maxSeats'] != 1 else view.no_duplicate_login.default_minutes_to_persist" /></td>
-									
+
 								<!-- The actions for editing -->
 								<td colspan="2" class="display-inline">
 									<input tal:attributes="value login" type="hidden" name="login" id="login" />
 									<input type="hidden" id="action" name="action" value="saveSeats" />
 									<input type="submit" alt="Save seats" value="Save" />
 									<input type="button" id="btnCancelEdit" name="btnCancelEdit" onclick="cancelEditSeats();" value="Cancel" />
+									<span tal:replace="structure context/@@authenticator/authenticator"/>
 								</td>
-							</form>
 						</tr>
 					</tbody>
 					</table>
+					</form>
 				</span>
 			</div><br/><br/>
-			
+
 			<!-- Explanation for how tokens are reported since we only clear stale tokens when we need to free up some -->
 			<div class="help-text">
 				The tokens reported on this page include those that are considered "expired".
 				We only clear stale tokens automatically if we need to free up some seats. This decision was made to favor performance.
 				If you plan to decrease the amount of seats available, it is also recommended to "Clear All Tokens".
 			</div>
-			
+
 			<hr class="faded-hrule" width="100%" />
-			
+
 			<div class="align-right display-inline">
 				<!-- Clear all tokens for login -->
 				<form action="@@manage-seats" method="post">
@@ -177,7 +178,7 @@
 					<tr tal:attributes="class python: 'even' if repeat['token'].index % 2 == 0 else 'odd'" tal:repeat="token activeTokens">
 						<div tal:define="tokenInfo view/no_duplicate_login/mapping2/?token | nothing">
 							<td tal:content="token">UID</td>
-	
+
 							<!-- If tokenInfo exists -->
 							<td tal:condition="tokenInfo">
 								<span tal:content="tokenInfo/startTime">Started</span>
@@ -189,7 +190,7 @@
 								<span tal:content="tokenInfo/ip">IP Address</span>
 							</td>
 							<!-- End exists:tokenInfo -->
-							
+
 							<!-- If tokenInfo does not exist -->
 							<td tal:condition="not:tokenInfo">
 								<span>Started</span>
@@ -206,11 +207,11 @@
 				</tbody>
 			</table>
 		</div>
-		
+
 		<!-- ADVANCED DEBUG INFO : HIDDEN BY DEFAULT -->
 		<div tal:condition="view/shouldShowDebugInfo">
 			<h1>DEBUG INFO</h1>
-			
+
 			<h3>Login Member Data</h3>
 			<div tal:condition="exists: view/no_duplicate_login/login_member_data_mapping">
 				<table class="listing">
@@ -223,7 +224,7 @@
 					<tr tal:repeat="login view/no_duplicate_login/login_member_data_mapping/keys" id="list-seats" class="bg-white">
 						<!-- The active tokens for login. This does not account for sessions that will have timed out (only those explicitly logged out). -->
 						<td class="center-text"><span class="lg-number" tal:content="login">login name</span></td>
-	
+
 						<!-- The max allowable seats -->
 						<td class="center-text"><span class="lg-number"
 						        tal:define="cached_member_data view/no_duplicate_login/login_member_data_mapping/?login"
@@ -236,7 +237,7 @@
 				</tbody>
 				</table>
 			</div>
-			
+
 		</div>
 	</div>
 	</body>

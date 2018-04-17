@@ -6,6 +6,7 @@ from DateTime import DateTime
 from Products.CMFCore.utils import getToolByName
 from plone.protect.interfaces import IDisableCSRFProtection
 from zope.interface import alsoProvides
+from plone import api
 
 import traceback
 import logging
@@ -22,52 +23,17 @@ class NoDuplicateLoginSeatsView(BrowserPage):
         self.context = context
         self.request = request
         self.no_duplicate_login = context.unrestrictedTraverse("acl_users/no_duplicate_login")
-        
-    def getMember(self, email):
-	""" Returns a member object for the given username """
-	member = None
-	
-	# try to get the member if it exists
-	mtool = getToolByName(self, 'portal_membership')
-	
-	memberInfo = mtool.searchMembers('email', email)
-	
-	# try by email first
-	try:
-	    memberId = memberInfo[0]['username']
-	    member = mtool.getMemberById( memberId )
-	except:
-	    member = None
-	    pass
-	
-	if member == None:
-	    memberInfo = mtool.searchMembers('username', email)
-	
-	    # try by username if not found by email (should be same but sometimes are not)
-	    try:
-		memberId = memberInfo[0]['username']
-		member = mtool.getMemberById( memberId )
-	    except:
-		member = None
-		pass
-	
-	# If the member was not found by email or username, then check the actual login_name stored in acl_users
-	# Try to find this user via the login name.
-	acl = self.context.acl_users
-	if member == None:
-	    userids = [user.get('userid') for user in
-		       acl.searchUsers(login=email, exact_match=False)
-		       if user.get('userid')]
-	    for userid in userids:
-		memberRecord = mtool.getMemberById(userid)
-		# must check that the login name is the same without regards to case since exact_match may return even partial matches
-		if memberRecord is not None and email.lower() == memberRecord.getProperty('email').lower():
-		    member = memberRecord
-		    break
-	
-	return member
 
-    
+    def getMember(self, email):
+        """ Returns a member object for the given username """
+        member = None
+        try:
+            member = api.user.get(username=email)
+        except:
+            if self.DEBUG:
+                traceback.print_exc()
+        return member
+
     def render(self):
         return self.index()
 
@@ -77,7 +43,7 @@ class NoDuplicateLoginSeatsView(BrowserPage):
         # get the max_seats property from the member data tool
         if member is not None:
             member.setMemberProperties(mapping=seats_state)
-    
+
     def updateSeatsCacheForLogin(self, login):
         """ Create or refresh the cached details for max_seats and other seats_state properties """
         if self.DEBUG:
@@ -95,11 +61,11 @@ class NoDuplicateLoginSeatsView(BrowserPage):
         login = self.request.get("login", "")
         max_seats = self.request.get("max-seats", 1)
         self.shouldShowDebugInfo = self.request.get("showDebugInfo", False)
-        
+
         # add logging when DEBUG is turned on
         if self.DEBUG:
             print "NoDuplicateLoginSeatsView::__call__"
-            print "action: %s, login: %s, max_seats: %i" % (action, login, max_seats)
+            print "action: %s, login: %s, max_seats: %s" % (action, login, str(max_seats))
 
         # For multiple seats, the default timeout is 5 minutes managed per user, whereas with single seats it is a static value belonging to the PAS plugin.
         if max_seats != 1:
@@ -121,10 +87,10 @@ class NoDuplicateLoginSeatsView(BrowserPage):
             try:
                 seats_state = {'max_seats': int( max_seats ), 'seat_timeout_in_minutes': float( seats_timeout )}
                 self.saveSeatsForUser( login, seats_state )
-                
+
                 # Clear all tokens for user since the timeouts and max_seats changed.
                 # If this is not done, then existing sessions could be kept alive even if more seats than the new max.
-                # This is because they are only checked against max_seats when they are being activated (not while they are being kept active through continued use). 
+                # This is because they are only checked against max_seats when they are being activated (not while they are being kept active through continued use).
                 self.no_duplicate_login.clearAllTokensForUser(login)
             except:
                 traceback.print_exc()
